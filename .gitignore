@@ -1,0 +1,5 @@
+.qtcreator/
+*.user
+ui_form.py
+__pycache__/
+*.autosave
