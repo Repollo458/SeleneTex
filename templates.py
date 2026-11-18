@@ -5,9 +5,8 @@ DEFAULT_TEMPLATE = "Artículo"
 TEMPLATES = {
     "Artículo": r"""\documentclass[12pt, a4paper]{article}
 
-% Codificación e idioma
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+% Fuentes e idioma (LuaLaTeX)
+\usepackage{fontspec}
 \usepackage[spanish]{babel}
 
 % Márgenes
@@ -34,9 +33,8 @@ Escribe aquí el contenido de tu artículo...
 
     "Informe / Reporte": r"""\documentclass[12pt, a4paper]{report}
 
-% Codificación e idioma
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+% Fuentes e idioma (LuaLaTeX)
+\usepackage{fontspec}
 \usepackage[spanish]{babel}
 
 % Márgenes
@@ -68,9 +66,8 @@ Escribe aquí el contenido del informe...
 % Tema de la presentación
 \usetheme{Madrid}
 
-% Codificación e idioma
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+% Fuentes e idioma (LuaLaTeX)
+\usepackage{fontspec}
 \usepackage[spanish]{babel}
 
 \title{Título de la Presentación}
@@ -101,9 +98,8 @@ Escribe aquí el contenido del informe...
 
     "Libro": r"""\documentclass[12pt, a4paper]{book}
 
-% Codificación e idioma
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+% Fuentes e idioma (LuaLaTeX)
+\usepackage{fontspec}
 \usepackage[spanish]{babel}
 
 % Márgenes
@@ -134,7 +130,7 @@ Escribe aquí el contenido del capítulo...
 """,
 
     "Documento Mínimo": r"""\documentclass[12pt, a4paper]{article}
-\usepackage[utf8]{inputenc}
+\usepackage{fontspec}
 \usepackage[spanish]{babel}
 
 \begin{document}

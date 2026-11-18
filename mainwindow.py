@@ -13,6 +13,7 @@ from ui_form import Ui_MainWindow
 from templates import TEMPLATES, DEFAULT_TEMPLATE
 
 APP_TITLE = "LaTeX App"
+TEX_FILTER = "LaTeX Documents (*.tex)"
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -32,15 +33,15 @@ class MainWindow(QMainWindow):
         try:
             if not self.maybe_save():
                 return
-            fileName = QFileDialog.getOpenFileName(self, "Open File", "/home", "LaTeX Documents (*tex)")
-            if fileName[0] == "":
+            file_name, _ = QFileDialog.getOpenFileName(self, "Open File", self.dialog_dir(), TEX_FILTER)
+            if file_name == "":
                 return
             # Leer primero; el estado solo se actualiza si la lectura ha ido bien
-            with open(fileName[0],"rt", encoding = "utf-8") as file:
+            with open(file_name, "rt", encoding="utf-8") as file:
                 content = file.read()
             self.ui.editor.setPlainText(content)
-            self.opened_file = pathlib.Path(fileName[0])
-            self.ui.logView.appendPlainText(f"Archivo {fileName[0]} abierto. \t {datetime.datetime.now()}")
+            self.opened_file = pathlib.Path(file_name)
+            self.ui.logView.appendPlainText(f"Archivo {file_name} abierto. \t {datetime.datetime.now()}")
             self.update_title()
         except (OSError, UnicodeDecodeError) as e:
             QMessageBox.critical(self, "Error al abrir", f"No se pudo abrir el archivo:\n{e}")
@@ -61,10 +62,13 @@ class MainWindow(QMainWindow):
         self.update_title()
 
     def action_saveas_triggered(self):
-        fileName = QFileDialog.getSaveFileName(self, "Save File", "/home", "LaTeX Documents (*tex)")
-        if fileName[0] == "":
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save File", self.dialog_dir(), TEX_FILTER)
+        if file_name == "":
             return False
-        return self.save_to(pathlib.Path(fileName[0]))
+        path = pathlib.Path(file_name)
+        if path.suffix != ".tex":
+            path = path.with_suffix(".tex")
+        return self.save_to(path)
 
     def update_title(self):
         if self.opened_file is None:
@@ -78,7 +82,7 @@ class MainWindow(QMainWindow):
             msgbox = QMessageBox.question(
                 self,
                 "Documento no guardado",
-                "El documento no está guardado.\n Elija que quiere hacer",
+                "El documento tiene cambios sin guardar.\n¿Quiere guardarlos?",
                 QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Save
             )
@@ -87,7 +91,7 @@ class MainWindow(QMainWindow):
                     return self.action_save_triggered()
                 case QMessageBox.StandardButton.Discard:
                     return True
-                case QMessageBox.StandardButton.Cancel:
+                case _:
                     return False
         else:
             return True
@@ -104,6 +108,12 @@ class MainWindow(QMainWindow):
         except OSError as e:
             QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar el archivo:\n{e}")
             return False
+
+    def dialog_dir(self):
+        if self.opened_file is None:
+            return str(pathlib.Path.home())
+        else:
+            return str(self.opened_file.parent)
 
 
 
