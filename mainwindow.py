@@ -1,6 +1,7 @@
 # This Python file uses the following encoding: utf-8
 import sys
 import datetime
+import pathlib
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PySide6.QtGui import QCloseEvent
 
@@ -11,7 +12,7 @@ from PySide6.QtGui import QCloseEvent
 from ui_form import Ui_MainWindow
 from templates import TEMPLATES, DEFAULT_TEMPLATE
 
-APP_TITLE = "LaTeX App - "
+APP_TITLE = "LaTeX App"
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -23,7 +24,9 @@ class MainWindow(QMainWindow):
         self.ui.actionNew.triggered.connect(self.action_new_triggered)
         self.ui.actionSaveAs.triggered.connect(self.action_saveas_triggered)
         self.ui.editor.document().modificationChanged.connect(self.setWindowModified)
-        self.opened_file = ""
+        self.opened_file = None
+
+        self.update_title()
 
     def action_open_triggered(self):
         try:
@@ -36,16 +39,16 @@ class MainWindow(QMainWindow):
             with open(fileName[0],"rt", encoding = "utf-8") as file:
                 content = file.read()
             self.ui.editor.setPlainText(content)
-            self.opened_file = fileName[0]
-            self.setWindowTitle(f"{APP_TITLE}{fileName[0].split("/")[-1]}[*]")
+            self.opened_file = pathlib.Path(fileName[0])
             self.ui.logView.appendPlainText(f"Archivo {fileName[0]} abierto. \t {datetime.datetime.now()}")
+            self.update_title()
         except (OSError, UnicodeDecodeError) as e:
             QMessageBox.critical(self, "Error al abrir", f"No se pudo abrir el archivo:\n{e}")
 
 
     def action_save_triggered(self):
         try:
-            if self.opened_file == "":
+            if self.opened_file is None:
                 return self.action_saveas_triggered()
             else:
                 with open(self.opened_file,"wt", encoding = "utf-8") as file:
@@ -62,8 +65,8 @@ class MainWindow(QMainWindow):
         if not self.maybe_save():
             return
         self.ui.editor.setPlainText(TEMPLATES[DEFAULT_TEMPLATE])
-        self.opened_file = ""
-        self.setWindowTitle(f"{APP_TITLE}new_document[*]")
+        self.opened_file = None
+        self.update_title()
 
     def action_saveas_triggered(self):
         try:
@@ -72,15 +75,22 @@ class MainWindow(QMainWindow):
                 return False
             with open(fileName[0], "wt", encoding="utf-8") as file:
                 file.write(self.ui.editor.toPlainText())
-            self.opened_file = fileName[0]
-            self.setWindowTitle(f"{APP_TITLE}{fileName[0].split("/")[-1]}[*]")
+            self.opened_file = pathlib.Path(fileName[0])
             self.ui.logView.appendPlainText(f"Archivo guardado en {fileName[0]} \t {datetime.datetime.now()}")
+            self.update_title()
 
             self.ui.editor.document().setModified(False)
             return True
         except OSError as e:
             QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar el archivo:\n{e}")
             return False
+
+    def update_title(self):
+        if self.opened_file is None:
+            name = "Sin título"
+        else:
+            name = self.opened_file.name
+        self.setWindowTitle(f"{name}[*] - {APP_TITLE}")
 
     def maybe_save(self):
         if self.ui.editor.document().isModified():
