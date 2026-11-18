@@ -47,19 +47,11 @@ class MainWindow(QMainWindow):
 
 
     def action_save_triggered(self):
-        try:
-            if self.opened_file is None:
-                return self.action_saveas_triggered()
-            else:
-                with open(self.opened_file,"wt", encoding = "utf-8") as file:
-                    file.write(self.ui.editor.toPlainText())
-                self.ui.logView.appendPlainText(f"Archivo guardado en {self.opened_file} \t {datetime.datetime.now()}")
+        if self.opened_file is None:
+            return self.action_saveas_triggered()
+        else:
+            return self.save_to(self.opened_file)
 
-            self.ui.editor.document().setModified(False)
-            return True
-        except OSError as e:
-            QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar el archivo:\n{e}")
-            return False
 
     def action_new_triggered(self):
         if not self.maybe_save():
@@ -69,21 +61,10 @@ class MainWindow(QMainWindow):
         self.update_title()
 
     def action_saveas_triggered(self):
-        try:
-            fileName = QFileDialog.getSaveFileName(self, "Save File", "/home", "LaTeX Documents (*tex)")
-            if fileName[0] == "":
-                return False
-            with open(fileName[0], "wt", encoding="utf-8") as file:
-                file.write(self.ui.editor.toPlainText())
-            self.opened_file = pathlib.Path(fileName[0])
-            self.ui.logView.appendPlainText(f"Archivo guardado en {fileName[0]} \t {datetime.datetime.now()}")
-            self.update_title()
-
-            self.ui.editor.document().setModified(False)
-            return True
-        except OSError as e:
-            QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar el archivo:\n{e}")
+        fileName = QFileDialog.getSaveFileName(self, "Save File", "/home", "LaTeX Documents (*tex)")
+        if fileName[0] == "":
             return False
+        return self.save_to(pathlib.Path(fileName[0]))
 
     def update_title(self):
         if self.opened_file is None:
@@ -110,6 +91,21 @@ class MainWindow(QMainWindow):
                     return False
         else:
             return True
+
+    def save_to(self, path):
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.ui.editor.toPlainText())
+            self.opened_file = path
+            self.ui.editor.document().setModified(False)
+            self.update_title()
+            self.ui.logView.appendPlainText(f"Archivo guardado en {self.opened_file} \t {datetime.datetime.now()}")
+            return True
+        except OSError as e:
+            QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar el archivo:\n{e}")
+            return False
+
+
 
 
     def closeEvent(self, event: QCloseEvent):
