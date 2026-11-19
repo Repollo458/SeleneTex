@@ -50,6 +50,12 @@ class MainWindow(QMainWindow):
             self.opened_file = pathlib.Path(file_name)
             self.ui.logView.appendPlainText(f"Archivo {file_name} abierto. \t {datetime.datetime.now()}")
             self.update_title()
+            pdf_path = self.opened_file.with_suffix(".pdf")
+            if pdf_path.exists():
+                self.ui.pdfView.load_pdf(pdf_path)
+            else:
+                self.ui.pdfView.clear_pages()
+                self.ui.pdfView.current_pdf = None
         except (OSError, UnicodeDecodeError) as e:
             QMessageBox.critical(self, "Error al abrir", f"No se pudo abrir el archivo:\n{e}")
 
@@ -67,6 +73,8 @@ class MainWindow(QMainWindow):
         self.ui.editor.setPlainText(TEMPLATES[DEFAULT_TEMPLATE])
         self.opened_file = None
         self.update_title()
+        self.ui.pdfView.clear_pages()
+        self.ui.pdfView.current_pdf = None
 
     def action_saveas_triggered(self):
         file_name, _ = QFileDialog.getSaveFileName(self, "Save File", self.dialog_dir(), TEX_FILTER)
@@ -153,9 +161,12 @@ class MainWindow(QMainWindow):
             pdf_path = self.opened_file.with_suffix(".pdf")
             self.ui.logView.appendPlainText("\nCompilación Exitosa\n")
             self.statusBar().showMessage("Compilación Terminada")
+            self.ui.pdfView.load_pdf(pdf_path)
         else:
             self.ui.logView.appendPlainText("\nError en la compilacion\n")
             self.statusBar().showMessage("Error en Compilacion")
+            if self.opened_file.with_suffix(".pdf").exists():
+                self.ui.pdfView.load_pdf(self.opened_file.with_suffix(".pdf"))
 
 
 
