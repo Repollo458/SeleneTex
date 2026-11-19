@@ -3,6 +3,7 @@ import sys
 import datetime
 import pathlib
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
+from PySide6.QtCore import QProcess
 from PySide6.QtGui import QCloseEvent
 
 # Important:
@@ -25,7 +26,13 @@ class MainWindow(QMainWindow):
         self.ui.actionNew.triggered.connect(self.action_new_triggered)
         self.ui.actionSaveAs.triggered.connect(self.action_saveas_triggered)
         self.ui.editor.document().modificationChanged.connect(self.setWindowModified)
+        self.ui.actionCompile.triggered.connect(self.action_compile_triggered)
+
         self.opened_file = None
+        self.compiler = QProcess(self)
+        self.compiler.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.compiler.readyReadStandardOutput.connect(self.on_compile_output)
+        self.compiler.finished.connect(self.on_compile_finished)
 
         self.update_title()
 
@@ -115,6 +122,40 @@ class MainWindow(QMainWindow):
         else:
             return str(self.opened_file.parent)
 
+    def action_compile_triggered(self):
+        if self.compiler.state() != QProcess.ProcessState.NotRunning:
+            self.ui.logView.appendPlainText("Compilación en Ejecución. Espere un momento\n")
+            return
+        if self.opened_file is None or self.ui.editor.document().isModified():
+            if not self.action_save_triggered():
+                return
+
+        self.compiler.setWorkingDirectory(str(self.opened_file.parent))
+        self.ui.actionCompile.setEnabled(False)
+        self.statusBar().showMessage("Compilando...")
+
+        args = [
+            "-lualatex",
+            "-synctex=1",
+            "-interaction=nonstopmode",
+            "-file-line-error",
+            self.opened_file.name,
+        ]
+        self.compiler.start("latexmk",args)
+
+    def on_compile_output(self):
+        data = self.compiler.readAllStandardOutput().data().decode("utf-8", errors = "replace")
+        self.ui.logView.appendPlainText(data.rstrip())
+
+    def on_compile_finished(self,exit_code,exit_status):
+        self.ui.actionCompile.setEnabled(True)
+        if exit_code == 0:
+            pdf_path = self.opened_file.with_suffix(".pdf")
+            self.ui.logView.appendPlainText("\nCompilación Exitosa\n")
+            self.statusBar().showMessage("Compilación Terminada")
+        else:
+            self.ui.logView.appendPlainText("\nError en la compilacion\n")
+            self.statusBar().showMessage("Error en Compilacion")
 
 
 
