@@ -2,4 +2,4 @@
 name = "Proyecto App Editor LaTeX"
 
 [tool.pyside6-project]
-files = ["form.ui", "mainwindow.py", "templates.py"]
+files = ["code_editor.py", "form.ui", "highlighter.py", "mainwindow.py", "pdf_viewer.py", "templates.py"]

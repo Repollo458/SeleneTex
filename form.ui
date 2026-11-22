@@ -24,8 +24,8 @@
        <property name="orientation">
         <enum>Qt::Orientation::Horizontal</enum>
        </property>
-       <widget class="QPlainTextEdit" name="editor"/>
-       <widget class="QWidget" name="pdfView" native="true"/>
+       <widget class="CodeEditor" name="editor"/>
+       <widget class="PdfViewer" name="pdfView" native="true"/>
       </widget>
       <widget class="QPlainTextEdit" name="logView">
        <property name="readOnly">
@@ -60,8 +60,15 @@
     </property>
     <addaction name="actionCompile"/>
    </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>View</string>
+    </property>
+    <addaction name="actionDark_Theme"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuBuild"/>
+   <addaction name="menuView"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSave">
@@ -119,7 +126,34 @@
     <enum>QAction::MenuRole::NoRole</enum>
    </property>
   </action>
+  <action name="actionDark_Theme">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Dark Theme</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PdfViewer</class>
+   <extends>QWidget</extends>
+   <header>pdf_viewer</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>CodeEditor</class>
+   <extends>QPlainTextEdit</extends>
+   <header>code_editor</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

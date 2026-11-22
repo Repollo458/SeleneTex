@@ -4,7 +4,9 @@ import datetime
 import pathlib
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PySide6.QtCore import QProcess
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QFont
+
+from highlighter import LatexHighLighter
 
 # Important:
 # You need to run the following command to generate the ui_form.py file
@@ -27,6 +29,7 @@ class MainWindow(QMainWindow):
         self.ui.actionSaveAs.triggered.connect(self.action_saveas_triggered)
         self.ui.editor.document().modificationChanged.connect(self.setWindowModified)
         self.ui.actionCompile.triggered.connect(self.action_compile_triggered)
+        self.ui.actionDark_Theme.toggled.connect(self.apply_theme)
 
         self.opened_file = None
         self.compiler = QProcess(self)
@@ -34,7 +37,11 @@ class MainWindow(QMainWindow):
         self.compiler.readyReadStandardOutput.connect(self.on_compile_output)
         self.compiler.finished.connect(self.on_compile_finished)
 
+        self.highlighter = LatexHighLighter(self.ui.editor.document())
+        self.ui.editor.setFont(QFont("Monospace",11))
+
         self.update_title()
+        self.apply_theme(True)
 
     def action_open_triggered(self):
         try:
@@ -168,6 +175,16 @@ class MainWindow(QMainWindow):
             if self.opened_file.with_suffix(".pdf").exists():
                 self.ui.pdfView.load_pdf(self.opened_file.with_suffix(".pdf"))
 
+    def apply_theme(self, dark:bool):
+        self.highlighter.set_theme("dark" if dark else "light")
+        if dark:
+            self.ui.editor.setStyleSheet("QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }")
+            self.ui.logView.setStyleSheet("QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }")
+            self.ui.editor.set_dark_mode(dark)
+        else:
+            self.ui.editor.setStyleSheet("QPlainTextEdit { background-color: #ffffff; color: #24292e; }")
+            self.ui.logView.setStyleSheet("QPlainTextEdit { background-color: #ffffff; color: #24292e; }")
+            self.ui.editor.set_dark_mode(dark)
 
 
     def closeEvent(self, event: QCloseEvent):
