@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTreeView,
     QWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
 )
 from PySide6.QtCore import QProcess, QTimer, QDir, Qt, QSettings
 from PySide6.QtGui import QCloseEvent, QFont, QIcon, QKeySequence, QShortcut, QTextCursor, QTextDocument
@@ -60,6 +62,12 @@ class MainWindow(QMainWindow):
         self.ui.actionDark_Theme.toggled.connect(self.apply_theme)
         self.ui.pdfView.page_clicked.connect(self.sync_pdf_to_code)
 
+        self.action_dark_pdf = self.ui.menuView.addAction("PDF en Modo Noche")
+        self.action_dark_pdf.setCheckable(True)
+        self.action_dark_pdf.setChecked(False)
+        self.action_dark_pdf.setShortcut("Ctrl+Shift+D")
+        self.action_dark_pdf.toggled.connect(self.ui.pdfView.set_dark_pdf)
+
         self.action_sync_to_pdf = self.ui.menuBuild.addAction("Ir al PDF (SyncTeX)")
         self.action_sync_to_pdf.setShortcut("Ctrl+Shift+J")
         self.action_sync_to_pdf.triggered.connect(self.sync_code_to_pdf)
@@ -83,6 +91,7 @@ class MainWindow(QMainWindow):
         self.ui.editor.setFont(QFont("Monospace",11))
 
         self.setup_project_tree()
+        self.setup_outline_tree()
         self.setup_find_bar()
         self.update_title()
         self.apply_theme(True)
@@ -112,7 +121,6 @@ class MainWindow(QMainWindow):
             self.update_title()
             self.update_project_root(path.parent)
             self.add_recent_file(path)
-            self.add_recent_file(path)
 
             target_tex = self.master_file if self.master_file is not None else self.opened_file
             pdf_path = target_tex.with_suffix(".pdf")
@@ -122,6 +130,7 @@ class MainWindow(QMainWindow):
                 self.ui.pdfView.clear_pages()
                 self.ui.pdfView.current_pdf = None
             self.auto_compiler_timer.stop()
+            self.update_outline()
         except (OSError, UnicodeDecodeError) as e:
             QMessageBox.critical(self, "Error al abrir", f"No se pudo abrir el archivo:\n{e}")
 
@@ -141,6 +150,7 @@ class MainWindow(QMainWindow):
         self.update_title()
         self.ui.pdfView.clear_pages()
         self.ui.pdfView.current_pdf = None
+        self.update_outline()
 
     def action_saveas_triggered(self):
         file_name, _ = QFileDialog.getSaveFileName(self, "Save File", self.dialog_dir(), TEX_FILTER)
@@ -188,7 +198,7 @@ class MainWindow(QMainWindow):
             self.ui.editor.document().setModified(False)
             self.update_title()
             self.update_project_root(path.parent)
-            self.add_recent_file(path)
+            self.update_outline()
             self.add_recent_file(path)
             self.ui.logView.appendPlainText(f"Archivo guardado en {self.opened_file} \t {datetime.datetime.now()}")
             return True
@@ -262,6 +272,7 @@ class MainWindow(QMainWindow):
     def on_text_changed(self):
         if self.ui.actionAuto_Compile.isChecked() and self.opened_file is not None:
             self.auto_compiler_timer.start()
+            self.update_outline()
 
     def on_log_cursor_changed(self):
         if not self.ui.logView.hasFocus():
@@ -291,6 +302,84 @@ class MainWindow(QMainWindow):
         self.project_dock.setWidget(self.tree_view)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.project_dock)
         self.ui.menuView.addAction(self.project_dock.toggleViewAction())
+
+    def setup_outline_tree(self):
+        self.outline_tree = QTreeWidget(self)
+        self.outline_tree.setHeaderHidden(True)
+        self.outline_tree.setIndentation(14)
+        self.outline_tree.itemClicked.connect(self.on_outline_item_clicked)
+
+        self.outline_dock = QDockWidget("Esquema", self)
+        self.outline_dock.setWidget(self.outline_tree)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.outline_dock)
+        self.ui.menuView.addAction(self.outline_dock.toggleViewAction())
+
+    def update_outline(self):
+        self.outline_tree.clear()
+        LEVELS = {
+            "part": 0,
+            "chapter": 1,
+            "section": 2,
+            "subsection": 3,
+            "subsubsection": 4,
+        }
+        sec_pattern = re.compile(r"(?<!\{)\\(part|chapter|section|subsection|subsubsection)\*?\{([^}]*)\}")
+        input_pattern = re.compile(r"\\(?:input|include)\{([^}]+)\}")
+
+        stack = []
+        anchor = self.master_file or self.opened_file
+        base_dir = anchor.parent if anchor is not None else None
+
+        def add_outline_node(title, level, target_path, line_num):
+            item = QTreeWidgetItem([title])
+            item.setData(0, Qt.ItemDataRole.UserRole, (target_path, line_num))
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            if stack:
+                stack[-1][1].addChild(item)
+            else:
+                self.outline_tree.addTopLevelItem(item)
+            stack.append((level, item))
+
+        def scan_lines(lines, file_path):
+            for line_num, line in enumerate(lines, start=1):
+                if line.lstrip().startswith("%"):
+                    continue
+                match = sec_pattern.search(line)
+                if match:
+                    cmd = match.group(1)
+                    title = match.group(2).strip()
+                    add_outline_node(title, LEVELS[cmd], file_path, line_num)
+                    continue
+
+                in_match = input_pattern.search(line)
+                if in_match and base_dir is not None:
+                    rel_name = in_match.group(1).strip()
+                    sub_path = base_dir / rel_name
+                    if sub_path.suffix == "":
+                        sub_path = sub_path.with_suffix(".tex")
+                    if sub_path.exists():
+                        try:
+                            sub_lines = sub_path.read_text(encoding="utf-8").splitlines()
+                            scan_lines(sub_lines, sub_path)
+                        except (OSError, UnicodeDecodeError):
+                            add_outline_node(f"📄 {rel_name}", 1, file_path, line_num)
+                    else:
+                        add_outline_node(f"📄 {rel_name}", 1, file_path, line_num)
+
+        scan_lines(self.ui.editor.toPlainText().splitlines(), self.opened_file)
+        self.outline_tree.expandAll()
+
+    def on_outline_item_clicked(self, item, column):
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not data:
+            return
+        target_path, line_num = data
+        if target_path is not None and target_path != self.opened_file and target_path.exists():
+            if not self.maybe_save():
+                return
+            self.load_file(target_path)
+        self.ui.editor.go_to_line(line_num)
 
     def update_project_root(self, folder_path: pathlib.Path):
         root_index = self.file_model.setRootPath(str(folder_path))
@@ -373,10 +462,22 @@ class MainWindow(QMainWindow):
             )
             page_match = re.search(r"^Page:(\d+)$", result.stdout, re.MULTILINE)
             y_match = re.search(r"^y:([0-9.]+)$", result.stdout, re.MULTILINE)
+            h_match = re.search(r"^h:([0-9.]+)$", result.stdout, re.MULTILINE)
+            v_match = re.search(r"^v:([0-9.]+)$", result.stdout, re.MULTILINE)
+            w_match = re.search(r"^W:([0-9.]+)$", result.stdout, re.MULTILINE)
+            H_match = re.search(r"^H:([0-9.]+)$", result.stdout, re.MULTILINE)
             if page_match and y_match:
                 page_num = int(page_match.group(1))
                 y_pt = float(y_match.group(1))
-                self.ui.pdfView.scroll_to_position(page_num, y_pt)
+                box_pt = None
+                if h_match and v_match and w_match and H_match:
+                    box_pt = (
+                        float(h_match.group(1)),
+                        float(v_match.group(1)),
+                        float(w_match.group(1)),
+                        float(H_match.group(1)),
+                    )
+                self.ui.pdfView.scroll_to_position(page_num, y_pt, box_pt)
                 self.statusBar().showMessage(f"SyncTeX → página {page_num}", 3000)
         except OSError:
             pass

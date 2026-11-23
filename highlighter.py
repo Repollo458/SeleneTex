@@ -76,7 +76,7 @@ QDockWidget::title {
     border-bottom: 1px solid #1e2235;
 }
 
-QTreeView {
+QTreeView, QTreeWidget {
     background-color: #11131c;
     color: #cbd5e1;
     border: none;
@@ -84,16 +84,19 @@ QTreeView {
     padding: 4px;
     outline: none;
 }
-QTreeView::item {
+QTreeView::item, QTreeWidget::item {
     padding: 5px 6px;
     border-radius: 4px;
 }
-QTreeView::item:hover {
+QTreeView::item:hover, QTreeWidget::item:hover {
     background-color: #1a1e2e;
 }
-QTreeView::item:selected {
+QTreeView::item:selected, QTreeWidget::item:selected {
     background-color: #1e293b;
     color: #38bdf8;
+}
+QTreeView::branch, QTreeWidget::branch {
+    background: transparent;
 }
 
 QPlainTextEdit {
@@ -253,7 +256,7 @@ QDockWidget::title {
     border-bottom: 1px solid #cbd5e1;
 }
 
-QTreeView {
+QTreeView, QTreeWidget {
     background-color: #f8fafc;
     color: #334155;
     border: none;
@@ -261,16 +264,19 @@ QTreeView {
     padding: 4px;
     outline: none;
 }
-QTreeView::item {
+QTreeView::item, QTreeWidget::item {
     padding: 5px 6px;
     border-radius: 4px;
 }
-QTreeView::item:hover {
+QTreeView::item:hover, QTreeWidget::item:hover {
     background-color: #e2e8f0;
 }
-QTreeView::item:selected {
+QTreeView::item:selected, QTreeWidget::item:selected {
     background-color: #dbeafe;
     color: #1d4ed8;
+}
+QTreeView::branch, QTreeWidget::branch {
+    background: transparent;
 }
 
 QPlainTextEdit {
