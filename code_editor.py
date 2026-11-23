@@ -59,8 +59,8 @@ class CodeEditor(QPlainTextEdit):
 
     def line_number_area_paint_event(self, event):
         painter = QPainter(self.line_number_area)
-        bg_color = QColor("#252526") if self.dark_mode else QColor("#f3f3f3")
-        fg_color = QColor("#858585") if self.dark_mode else QColor("#6e7781")
+        bg_color = QColor("#151722") if self.dark_mode else QColor("#f1f5f9")
+        fg_color = QColor("#64748b") if self.dark_mode else QColor("#64748b")
         painter.fillRect(event.rect(), bg_color)
 
         block = self.firstVisibleBlock()
@@ -89,7 +89,7 @@ class CodeEditor(QPlainTextEdit):
         extra_selections = []
         if not self.isReadOnly():
             selection = QTextEdit.ExtraSelection()
-            line_color = QColor("#2a2d2e") if self.dark_mode else QColor("#f0f6ff")
+            line_color = QColor("#222536") if self.dark_mode else QColor("#eff6ff")
             selection.format.setBackground(line_color)
             selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
             selection.cursor = self.textCursor()

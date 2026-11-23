@@ -3,14 +3,30 @@
 # if __name__ == "__main__":
 #     pass
 import fitz
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 
 MIN_ZOOM = 0.5
 MAX_ZOOM = 4.0
 
+class PdfPageLabel(QLabel):
+    def __init__(self,page_num: int, viewer):
+        super().__init__()
+        self.page_num = page_num
+        self.viewer = viewer
+        self.setStyleSheet("background-color: white; border: 1px solid #334155; margin: 6px;")
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position()
+            x_pt = pos.x() / self.viewer.zoom
+            y_pt = pos.y() / self.viewer.zoom
+
+            self.viewer.page_clicked.emit(self.page_num, x_pt, y_pt)
+
 class PdfViewer(QScrollArea):
+    page_clicked = Signal(int, float, float)
     def __init__(self, parent = None):
         super().__init__(parent)
         self.setWidgetResizable(True)
@@ -22,6 +38,7 @@ class PdfViewer(QScrollArea):
 
         self.current_pdf = None
         self.zoom = 1.5
+
 
 
     def clear_pages(self):
@@ -36,7 +53,7 @@ class PdfViewer(QScrollArea):
         self.clear_pages()
 
         with fitz.open(pdf_path) as doc:
-            for page in doc:
+            for page_num, page in enumerate(doc, start=1):
                 matrix = fitz.Matrix(self.zoom, self.zoom)
                 pix = page.get_pixmap(matrix = matrix)
                 image = QImage(
@@ -46,7 +63,7 @@ class PdfViewer(QScrollArea):
                     pix.stride,
                     QImage.Format.Format_RGB888,
                 ).copy()
-                label = QLabel()
+                label = PdfPageLabel(page_num, self)
                 label.setPixmap(QPixmap.fromImage(image))
                 self.pages_layout.addWidget(label)
 
@@ -54,11 +71,19 @@ class PdfViewer(QScrollArea):
         self.current_pdf = pdf_path
         self.verticalScrollBar().setValue(scroll_pos)
 
+    def scroll_to_position(self, page_num: int, y_pt: float):
+        index = page_num - 1
+        if 0 <= index < self.pages_layout.count():
+            widget = self.pages_layout.itemAt(index).widget()
+            if widget is not None:
+                target_y = widget.y() + int(y_pt * self.zoom) - 100
+                self.verticalScrollBar().setValue(max(0, target_y))
+
     def set_zoom(self, new_zoom):
-        new_zoom = max(MIN_ZOOM,min(new_zoom,MAX_ZOOM))
-        self.zoom = new_zoom
+        new_zoom = max(MIN_ZOOM, min(new_zoom, MAX_ZOOM))
         if new_zoom == self.zoom:
             return
+        self.zoom = new_zoom
         if self.current_pdf is not None:
             self.load_pdf(self.current_pdf)
 

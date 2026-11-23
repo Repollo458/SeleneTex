@@ -19,9 +19,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from PySide6.QtCore import QProcess, QTimer, QDir, Qt, QSettings
-from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QShortcut, QTextCursor, QTextDocument
+from PySide6.QtGui import QCloseEvent, QFont, QIcon, QKeySequence, QShortcut, QTextCursor, QTextDocument
 
-from highlighter import LatexHighLighter
+from highlighter import DARK_STYLESHEET, LIGHT_STYLESHEET, LatexHighLighter
 
 # Important:
 # You need to run the following command to generate the ui_form.py file
@@ -30,14 +30,17 @@ from highlighter import LatexHighLighter
 from ui_form import Ui_MainWindow
 from templates import TEMPLATES, DEFAULT_TEMPLATE
 
-APP_TITLE = "LaTeX App"
+APP_TITLE = "SeleneTeX"
 TEX_FILTER = "LaTeX Documents (*.tex)"
+ICON_PATH = pathlib.Path(__file__).resolve().parent / "logo.png"
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        if ICON_PATH.exists():
+            self.setWindowIcon(QIcon(str(ICON_PATH)))
         self.resize(1300,850)
 
         self.ui.top_splitter.setSizes([650, 650])
@@ -253,14 +256,8 @@ class MainWindow(QMainWindow):
 
     def apply_theme(self, dark:bool):
         self.highlighter.set_theme("dark" if dark else "light")
-        if dark:
-            self.ui.editor.setStyleSheet("QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }")
-            self.ui.logView.setStyleSheet("QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }")
-            self.ui.editor.set_dark_mode(dark)
-        else:
-            self.ui.editor.setStyleSheet("QPlainTextEdit { background-color: #ffffff; color: #24292e; }")
-            self.ui.logView.setStyleSheet("QPlainTextEdit { background-color: #ffffff; color: #24292e; }")
-            self.ui.editor.set_dark_mode(dark)
+        self.setStyleSheet(DARK_STYLESHEET if dark else LIGHT_STYLESHEET)
+        self.ui.editor.set_dark_mode(dark)
 
     def on_text_changed(self):
         if self.ui.actionAuto_Compile.isChecked() and self.opened_file is not None:
@@ -543,6 +540,11 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_TITLE)
+    app.setApplicationDisplayName(APP_TITLE)
+    app.setDesktopFileName("selenetex")
+    if ICON_PATH.exists():
+        app.setWindowIcon(QIcon(str(ICON_PATH)))
     widget = MainWindow()
     widget.show()
     sys.exit(app.exec())
