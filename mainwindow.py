@@ -2,8 +2,9 @@
 import sys
 import datetime
 import pathlib
+import re
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
-from PySide6.QtCore import QProcess
+from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtGui import QCloseEvent, QFont
 
 from highlighter import LatexHighLighter
@@ -31,11 +32,19 @@ class MainWindow(QMainWindow):
         self.ui.actionCompile.triggered.connect(self.action_compile_triggered)
         self.ui.actionDark_Theme.toggled.connect(self.apply_theme)
 
+        self.auto_compiler_timer = QTimer(self)
+        self.auto_compiler_timer.setSingleShot(True)
+        self.auto_compiler_timer.setInterval(1500)
+        self.auto_compiler_timer.timeout.connect(self.action_compile_triggered)
+
+        self.ui.editor.textChanged.connect(self.on_text_changed)
+
         self.opened_file = None
         self.compiler = QProcess(self)
         self.compiler.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.compiler.readyReadStandardOutput.connect(self.on_compile_output)
         self.compiler.finished.connect(self.on_compile_finished)
+        self.ui.logView.cursorPositionChanged.connect(self.on_log_cursor_changed)
 
         self.highlighter = LatexHighLighter(self.ui.editor.document())
         self.ui.editor.setFont(QFont("Monospace",11))
@@ -63,6 +72,7 @@ class MainWindow(QMainWindow):
             else:
                 self.ui.pdfView.clear_pages()
                 self.ui.pdfView.current_pdf = None
+            self.auto_compiler_timer.stop()
         except (OSError, UnicodeDecodeError) as e:
             QMessageBox.critical(self, "Error al abrir", f"No se pudo abrir el archivo:\n{e}")
 
@@ -156,6 +166,7 @@ class MainWindow(QMainWindow):
             "-file-line-error",
             self.opened_file.name,
         ]
+        self.ui.logView.clear()
         self.compiler.start("latexmk",args)
 
     def on_compile_output(self):
@@ -186,6 +197,19 @@ class MainWindow(QMainWindow):
             self.ui.logView.setStyleSheet("QPlainTextEdit { background-color: #ffffff; color: #24292e; }")
             self.ui.editor.set_dark_mode(dark)
 
+    def on_text_changed(self):
+        if self.ui.actionAuto_Compile.isChecked() and self.opened_file is not None:
+            self.auto_compiler_timer.start()
+
+    def on_log_cursor_changed(self):
+        if not self.ui.logView.hasFocus():
+            return
+        line_text = self.ui.logView.textCursor().block().text()
+        match = re.search(r"(?:\.tex:|^l\.)(\d+)", line_text)
+        if match:
+            line_num = int(match.group(1))
+            self.ui.editor.go_to_line(line_num)
+            self.statusBar().showMessage(f"Saltando a la línea {line_num}", 3000)
 
     def closeEvent(self, event: QCloseEvent):
         if not self.maybe_save():

@@ -93,3 +93,12 @@ class CodeEditor(QPlainTextEdit):
         self.dark_mode = dark
         self.highlight_current_line()
         self.line_number_area.update()
+
+    def go_to_line(self, line_number: int):
+        block = self.document().findBlockByLineNumber(line_number - 1)
+        if block.isValid():
+            cursor = self.textCursor()
+            cursor.setPosition(block.position())
+            self.setTextCursor(cursor)
+            self.centerCursor()
+            self.setFocus()

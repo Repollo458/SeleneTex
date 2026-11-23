@@ -59,6 +59,7 @@
      <string>Build</string>
     </property>
     <addaction name="actionCompile"/>
+    <addaction name="actionAuto_Compile"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -135,6 +136,20 @@
    </property>
    <property name="text">
     <string>Dark Theme</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionAuto_Compile">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Auto-Compile</string>
    </property>
    <property name="menuRole">
     <enum>QAction::MenuRole::NoRole</enum>
