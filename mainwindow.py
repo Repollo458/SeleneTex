@@ -3,9 +3,23 @@ import sys
 import datetime
 import pathlib
 import re
-from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox, QDockWidget, QFileSystemModel, QTreeView
-from PySide6.QtCore import QProcess, QTimer, QDir, Qt
-from PySide6.QtGui import QCloseEvent, QFont
+import subprocess
+from PySide6.QtWidgets import (
+    QApplication,
+    QDockWidget,
+    QFileDialog,
+    QFileSystemModel,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QTreeView,
+    QWidget,
+)
+from PySide6.QtCore import QProcess, QTimer, QDir, Qt, QSettings
+from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QShortcut, QTextCursor, QTextDocument
 
 from highlighter import LatexHighLighter
 
@@ -41,6 +55,11 @@ class MainWindow(QMainWindow):
         self.ui.editor.document().modificationChanged.connect(self.setWindowModified)
         self.ui.actionCompile.triggered.connect(self.action_compile_triggered)
         self.ui.actionDark_Theme.toggled.connect(self.apply_theme)
+        self.ui.pdfView.page_clicked.connect(self.sync_pdf_to_code)
+
+        self.action_sync_to_pdf = self.ui.menuBuild.addAction("Ir al PDF (SyncTeX)")
+        self.action_sync_to_pdf.setShortcut("Ctrl+Shift+J")
+        self.action_sync_to_pdf.triggered.connect(self.sync_code_to_pdf)
 
         self.auto_compiler_timer = QTimer(self)
         self.auto_compiler_timer.setSingleShot(True)
@@ -61,9 +80,14 @@ class MainWindow(QMainWindow):
         self.ui.editor.setFont(QFont("Monospace",11))
 
         self.setup_project_tree()
+        self.setup_find_bar()
         self.update_title()
         self.apply_theme(True)
         self.update_project_root(pathlib.Path.home())
+
+        self.settings = QSettings("LaTeXApp", "LaTeXApp")
+        self.recent_menu = self.ui.menuFile.addMenu("Recent Files")
+        self.update_recent_files_menu()
 
     def action_open_triggered(self):
         if not self.maybe_save():
@@ -84,6 +108,8 @@ class MainWindow(QMainWindow):
             self.ui.logView.appendPlainText(f"Archivo {path} abierto. \t {datetime.datetime.now()}")
             self.update_title()
             self.update_project_root(path.parent)
+            self.add_recent_file(path)
+            self.add_recent_file(path)
 
             target_tex = self.master_file if self.master_file is not None else self.opened_file
             pdf_path = target_tex.with_suffix(".pdf")
@@ -159,6 +185,8 @@ class MainWindow(QMainWindow):
             self.ui.editor.document().setModified(False)
             self.update_title()
             self.update_project_root(path.parent)
+            self.add_recent_file(path)
+            self.add_recent_file(path)
             self.ui.logView.appendPlainText(f"Archivo guardado en {self.opened_file} \t {datetime.datetime.now()}")
             return True
         except OSError as e:
@@ -289,6 +317,219 @@ class MainWindow(QMainWindow):
                 return
             self.load_file(path)
 
+    def sync_pdf_to_code(self, page_num: int, x_pt: float, y_pt: float):
+        target_tex = self.master_file or self.opened_file
+        if target_tex is None:
+            return
+        pdf_path = target_tex.with_suffix(".pdf")
+        build_dir = target_tex.parent / ".tex_builds" / target_tex.stem
+        try:
+            result = subprocess.run(
+                [
+                    "synctex",
+                    "edit",
+                    "-o",
+                    f"{page_num}:{x_pt}:{y_pt}:{pdf_path}",
+                    "-d",
+                    str(build_dir),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            file_match = re.search(r"^Input:(.+)$", result.stdout, re.MULTILINE)
+            line_match = re.search(r"^Line:(\d+)$", result.stdout, re.MULTILINE)
+            if file_match and line_match:
+                input_path = pathlib.Path(file_match.group(1).strip()).resolve()
+                line_num = int(line_match.group(1))
+                if input_path.exists() and input_path != self.opened_file:
+                    if not self.maybe_save():
+                        return
+                    self.load_file(input_path)
+                self.ui.editor.go_to_line(line_num)
+                self.statusBar().showMessage(f"SyncTeX → línea {line_num}", 3000)
+        except OSError:
+            pass
+
+    def sync_code_to_pdf(self):
+        if self.opened_file is None:
+            return
+        target_tex = self.master_file or self.opened_file
+        pdf_path = target_tex.with_suffix(".pdf")
+        build_dir = target_tex.parent / ".tex_builds" / target_tex.stem
+        line_num = self.ui.editor.textCursor().blockNumber() + 1
+        try:
+            result = subprocess.run(
+                [
+                    "synctex",
+                    "view",
+                    "-i",
+                    f"{line_num}:1:{self.opened_file}",
+                    "-o",
+                    str(pdf_path),
+                    "-d",
+                    str(build_dir),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            page_match = re.search(r"^Page:(\d+)$", result.stdout, re.MULTILINE)
+            y_match = re.search(r"^y:([0-9.]+)$", result.stdout, re.MULTILINE)
+            if page_match and y_match:
+                page_num = int(page_match.group(1))
+                y_pt = float(y_match.group(1))
+                self.ui.pdfView.scroll_to_position(page_num, y_pt)
+                self.statusBar().showMessage(f"SyncTeX → página {page_num}", 3000)
+        except OSError:
+            pass
+
+    def add_recent_file(self, path: pathlib.Path):
+        path_str = str(path.resolve())
+        recent = self.settings.value("recent_files", [], type=list)
+        if path_str in recent:
+            recent.remove(path_str)
+        recent.insert(0,path_str)
+        recent = recent[:10]
+        self.settings.setValue("recent_files", recent)
+        self.update_recent_files_menu()
+
+    def update_recent_files_menu(self):
+        self.recent_menu.clear()
+        recent = self.settings.value("recent_files", [], type=list)
+        valid_files = [p for p in recent if pathlib.Path(p).exists()]
+
+        if not valid_files:
+            empty_action = self.recent_menu.addAction("(Sin Archivos Recientes)")
+            empty_action.setEnabled(False)
+            return
+
+        for path_str in valid_files:
+            p = pathlib.Path(path_str)
+            action = self.recent_menu.addAction(f"{p.name} - {p.parent}")
+            action.triggered.connect(lambda checked = False, target = p: self.open_recent_file(target))
+        self.recent_menu.addSeparator()
+        clear_action = self.recent_menu.addAction("Limpiar Historial")
+        clear_action.triggered.connect(self.clear_recent_files)
+
+    def open_recent_file(self, path: pathlib.Path):
+        if not self.maybe_save():
+            return
+        self.load_file(path)
+
+    def clear_recent_files(self):
+        self.settings.setValue("recent_files", [])
+        self.update_recent_files_menu()
+
+    def setup_find_bar(self):
+        self.find_bar = QWidget(self)
+        layout = QHBoxLayout(self.find_bar)
+        layout.setContentsMargins(6, 4, 6, 4)
+
+        self.find_input = QLineEdit(self.find_bar)
+        self.find_input.setPlaceholderText("Buscar...")
+        self.find_input.returnPressed.connect(self.find_next)
+
+        btn_next = QPushButton("↓", self.find_bar)
+        btn_next.setToolTip("Siguiente")
+        btn_next.clicked.connect(self.find_next)
+
+        btn_prev = QPushButton("↑", self.find_bar)
+        btn_prev.setToolTip("Anterior")
+        btn_prev.clicked.connect(self.find_prev)
+
+        self.replace_input = QLineEdit(self.find_bar)
+        self.replace_input.setPlaceholderText("Reemplazar con...")
+
+        btn_replace = QPushButton("Reemplazar", self.find_bar)
+        btn_replace.clicked.connect(self.replace_one)
+
+        btn_replace_all = QPushButton("Reemplazar todo", self.find_bar)
+        btn_replace_all.clicked.connect(self.replace_all)
+
+        btn_close = QPushButton("✕", self.find_bar)
+        btn_close.setFixedWidth(28)
+        btn_close.clicked.connect(self.hide_find_bar)
+
+        layout.addWidget(QLabel("Buscar:"))
+        layout.addWidget(self.find_input)
+        layout.addWidget(btn_prev)
+        layout.addWidget(btn_next)
+        layout.addWidget(QLabel("Reemplazar:"))
+        layout.addWidget(self.replace_input)
+        layout.addWidget(btn_replace)
+        layout.addWidget(btn_replace_all)
+        layout.addWidget(btn_close)
+
+        self.ui.verticalLayout_3.insertWidget(0, self.find_bar)
+        self.find_bar.hide()
+
+        self.action_find = self.ui.menuView.addAction("Buscar / Reemplazar")
+        self.action_find.setShortcut(QKeySequence.StandardKey.Find)
+        self.action_find.triggered.connect(self.show_find_bar)
+
+        self.esc_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self.find_bar)
+        self.esc_shortcut.activated.connect(self.hide_find_bar)
+
+    def show_find_bar(self):
+        self.find_bar.show()
+        selected = self.ui.editor.textCursor().selectedText()
+        if selected:
+            self.find_input.setText(selected)
+        self.find_input.setFocus()
+        self.find_input.selectAll()
+
+    def hide_find_bar(self):
+        self.find_bar.hide()
+        self.ui.editor.setFocus()
+
+    def find_next(self):
+        query = self.find_input.text()
+        if not query:
+            return
+        if not self.ui.editor.find(query):
+            # Si llega al final del documento, vuelve a buscar desde el principio
+            cursor = self.ui.editor.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            self.ui.editor.setTextCursor(cursor)
+            if not self.ui.editor.find(query):
+                self.statusBar().showMessage(f"No se encontró '{query}'", 3000)
+
+    def find_prev(self):
+        query = self.find_input.text()
+        if not query:
+            return
+        if not self.ui.editor.find(query, QTextDocument.FindFlag.FindBackward):
+            cursor = self.ui.editor.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.ui.editor.setTextCursor(cursor)
+            if not self.ui.editor.find(query, QTextDocument.FindFlag.FindBackward):
+                self.statusBar().showMessage(f"No se encontró '{query}'", 3000)
+
+    def replace_one(self):
+        query = self.find_input.text()
+        if not query:
+            return
+        cursor = self.ui.editor.textCursor()
+        if cursor.hasSelection() and cursor.selectedText().lower() == query.lower():
+            cursor.insertText(self.replace_input.text())
+        self.find_next()
+
+    def replace_all(self):
+        query = self.find_input.text()
+        if not query:
+            return
+        replacement = self.replace_input.text()
+        cursor = self.ui.editor.textCursor()
+        cursor.beginEditBlock()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        self.ui.editor.setTextCursor(cursor)
+        count = 0
+        while self.ui.editor.find(query):
+            self.ui.editor.textCursor().insertText(replacement)
+            count += 1
+        cursor.endEditBlock()
+        self.statusBar().showMessage(f"{count} reemplazos realizados", 3000)
 
 
 
