@@ -134,6 +134,20 @@ class CodeEditor(QPlainTextEdit):
             cursor.movePosition(cursor.MoveOperation.Left, cursor.MoveMode.MoveAnchor, offset)
         self.setTextCursor(cursor)
 
+    def wrap_selection(self, prefix: str, suffix: str):
+        cursor = self.textCursor()
+        selected = cursor.selectedText()
+        if selected:
+            cursor.insertText(f"{prefix}{selected}{suffix}")
+        else:
+            cursor.insertText(f"{prefix}{suffix}")
+            cursor.movePosition(
+                cursor.MoveOperation.Left,
+                cursor.MoveMode.MoveAnchor,
+                len(suffix),
+            )
+        self.setTextCursor(cursor)
+
     def update_custom_commands(self):
         text = self.toPlainText()
         custom = set()

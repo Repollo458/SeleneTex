@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         self.setup_project_tree()
         self.setup_outline_tree()
         self.setup_find_bar()
+        self.setup_status_bar()
         self.update_title()
         self.apply_theme(True)
         self.update_project_root(pathlib.Path.home())
@@ -100,6 +101,24 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("LaTeXApp", "LaTeXApp")
         self.recent_menu = self.ui.menuFile.addMenu("Recent Files")
         self.update_recent_files_menu()
+
+        self.template_menu = self.ui.menuFile.addMenu("New from Template")
+        for name in TEMPLATES:
+            action = self.template_menu.addAction(name)
+            action.triggered.connect(lambda checked = False, t=name: self.new_from_template(t))
+
+        self.format_menu = self.menuBar().addMenu("Format")
+        act_bold = self.format_menu.addAction("Negrita (\\textbf)")
+        act_bold.setShortcut("Ctrl+B")
+        act_bold.triggered.connect(lambda: self.ui.editor.wrap_selection(r"\textbf{", "}"))
+
+        act_italic = self.format_menu.addAction("Cursiva (\\textit)")
+        act_italic.setShortcut("Ctrl+I")
+        act_italic.triggered.connect(lambda: self.ui.editor.wrap_selection(r"\textit{", "}"))
+
+        act_math = self.format_menu.addAction("Matemáticas ($...$)")
+        act_math.setShortcut("Ctrl+M")
+        act_math.triggered.connect(lambda: self.ui.editor.wrap_selection("$", "$"))
 
     def action_open_triggered(self):
         if not self.maybe_save():
@@ -131,6 +150,8 @@ class MainWindow(QMainWindow):
                 self.ui.pdfView.current_pdf = None
             self.auto_compiler_timer.stop()
             self.update_outline()
+            self.update_page_count()
+            self.update_word_count()
         except (OSError, UnicodeDecodeError) as e:
             QMessageBox.critical(self, "Error al abrir", f"No se pudo abrir el archivo:\n{e}")
 
@@ -143,14 +164,7 @@ class MainWindow(QMainWindow):
 
 
     def action_new_triggered(self):
-        if not self.maybe_save():
-            return
-        self.ui.editor.setPlainText(TEMPLATES[DEFAULT_TEMPLATE])
-        self.opened_file = None
-        self.update_title()
-        self.ui.pdfView.clear_pages()
-        self.ui.pdfView.current_pdf = None
-        self.update_outline()
+        self.new_from_template(DEFAULT_TEMPLATE)
 
     def action_saveas_triggered(self):
         file_name, _ = QFileDialog.getSaveFileName(self, "Save File", self.dialog_dir(), TEX_FILTER)
@@ -258,6 +272,8 @@ class MainWindow(QMainWindow):
             if pdf_path.exists():
                 self.ui.pdfView.load_pdf(pdf_path)
 
+        self.update_page_count()
+
         synctex_file = target_tex.with_suffix(".synctex.gz")
         if synctex_file.exists():
             target_dir = target_tex.parent / ".tex_builds" / target_tex.stem
@@ -270,9 +286,10 @@ class MainWindow(QMainWindow):
         self.ui.editor.set_dark_mode(dark)
 
     def on_text_changed(self):
+        self.update_word_count()
+        self.update_outline()
         if self.ui.actionAuto_Compile.isChecked() and self.opened_file is not None:
             self.auto_compiler_timer.start()
-            self.update_outline()
 
     def on_log_cursor_changed(self):
         if not self.ui.logView.hasFocus():
@@ -396,6 +413,7 @@ class MainWindow(QMainWindow):
 
         if path.suffix.lower() == ".pdf":
             self.ui.pdfView.load_pdf(path)
+            self.update_page_count()
             return
 
         if path.suffix.lower() in (".tex", ".bib", ".sty", ".cls", ".txt"):
@@ -629,7 +647,18 @@ class MainWindow(QMainWindow):
         cursor.endEditBlock()
         self.statusBar().showMessage(f"{count} reemplazos realizados", 3000)
 
-
+    def new_from_template(self, template_name : str):
+        if not self.maybe_save():
+            return
+        self.ui.editor.setPlainText(TEMPLATES[template_name])
+        self.opened_file = None
+        self.master_file = None
+        self.update_title()
+        self.ui.pdfView.clear_pages()
+        self.ui.pdfView.current_pdf = None
+        self.update_outline()
+        self.update_page_count()
+        self.update_word_count()
 
     def closeEvent(self, event: QCloseEvent):
         if not self.maybe_save():
@@ -637,8 +666,35 @@ class MainWindow(QMainWindow):
         else:
             event.accept()
 
+    def setup_status_bar(self):
+        self.lbl_pages = QLabel("📄 0 págs")
+        self.lbl_words = QLabel("📝 0 palabras")
+        self.lbl_cursor = QLabel("Línea 1, Col 1")
 
+        for lbl in (self.lbl_pages, self.lbl_words, self.lbl_cursor):
+            lbl.setStyleSheet("padding: 0  8px;")
+            self.statusBar().addPermanentWidget(lbl)
 
+        self.ui.editor.cursorPositionChanged.connect(self.update_cursor_status)
+
+    def update_cursor_status(self):
+        cursor = self.ui.editor.textCursor()
+        line = cursor.blockNumber() + 1
+        col = cursor.positionInBlock() + 1
+        self.lbl_cursor.setText(f"Línea {line}, Col {col}")
+
+    def update_word_count(self):
+        text = self.ui.editor.toPlainText()
+        if r"\begin{document}" in text:
+            text = text.split(r"\begin{document}", 1)[1]
+        text = re.sub(r"(?<!\\)%.*$", "", text, flags=re.MULTILINE)
+        text = re.sub(r"\\[A-Za-z@]+\*?", " ", text)
+        words = re.findall(r"\b[^\W\d_]+\b", text)
+        self.lbl_words.setText(f"📝 {len(words)} palabras")
+
+    def update_page_count(self):
+        count = self.ui.pdfView.pages_layout.count()
+        self.lbl_pages.setText(f"📄 {count} págs")
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName(APP_TITLE)
