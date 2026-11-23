@@ -3,8 +3,8 @@ import sys
 import datetime
 import pathlib
 import re
-from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
-from PySide6.QtCore import QProcess, QTimer
+from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox, QDockWidget, QFileSystemModel, QTreeView
+from PySide6.QtCore import QProcess, QTimer, QDir, Qt
 from PySide6.QtGui import QCloseEvent, QFont
 
 from highlighter import LatexHighLighter
@@ -24,6 +24,16 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self.resize(1300,850)
+
+        self.ui.top_splitter.setSizes([650, 650])
+        self.ui.top_splitter.setStretchFactor(0, 1)
+        self.ui.top_splitter.setStretchFactor(1, 1)
+
+        self.ui.main_splitter.setSizes([680, 150])
+        self.ui.main_splitter.setStretchFactor(0, 4)
+        self.ui.main_splitter.setStretchFactor(1, 1)
+
         self.ui.actionOpen.triggered.connect(self.action_open_triggered)
         self.ui.actionSave.triggered.connect(self.action_save_triggered)
         self.ui.actionNew.triggered.connect(self.action_new_triggered)
@@ -40,6 +50,7 @@ class MainWindow(QMainWindow):
         self.ui.editor.textChanged.connect(self.on_text_changed)
 
         self.opened_file = None
+        self.master_file = None
         self.compiler = QProcess(self)
         self.compiler.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.compiler.readyReadStandardOutput.connect(self.on_compile_output)
@@ -49,24 +60,33 @@ class MainWindow(QMainWindow):
         self.highlighter = LatexHighLighter(self.ui.editor.document())
         self.ui.editor.setFont(QFont("Monospace",11))
 
+        self.setup_project_tree()
         self.update_title()
         self.apply_theme(True)
+        self.update_project_root(pathlib.Path.home())
 
     def action_open_triggered(self):
+        if not self.maybe_save():
+            return
+        file_name, _ = QFileDialog.getOpenFileName(self, "Open File", self.dialog_dir(), TEX_FILTER)
+        if file_name == "":
+            return
+        self.load_file(pathlib.Path(file_name))
+
+    def load_file(self, path: pathlib.Path):
         try:
-            if not self.maybe_save():
-                return
-            file_name, _ = QFileDialog.getOpenFileName(self, "Open File", self.dialog_dir(), TEX_FILTER)
-            if file_name == "":
-                return
-            # Leer primero; el estado solo se actualiza si la lectura ha ido bien
-            with open(file_name, "rt", encoding="utf-8") as file:
+            with open(path, "rt", encoding="utf-8") as file:
                 content = file.read()
             self.ui.editor.setPlainText(content)
-            self.opened_file = pathlib.Path(file_name)
-            self.ui.logView.appendPlainText(f"Archivo {file_name} abierto. \t {datetime.datetime.now()}")
+            self.opened_file = path
+            if r"\documentclass" in content:
+                self.master_file = path
+            self.ui.logView.appendPlainText(f"Archivo {path} abierto. \t {datetime.datetime.now()}")
             self.update_title()
-            pdf_path = self.opened_file.with_suffix(".pdf")
+            self.update_project_root(path.parent)
+
+            target_tex = self.master_file if self.master_file is not None else self.opened_file
+            pdf_path = target_tex.with_suffix(".pdf")
             if pdf_path.exists():
                 self.ui.pdfView.load_pdf(pdf_path)
             else:
@@ -130,11 +150,15 @@ class MainWindow(QMainWindow):
 
     def save_to(self, path):
         try:
+            content = self.ui.editor.toPlainText()
             with open(path, "w", encoding="utf-8") as f:
-                f.write(self.ui.editor.toPlainText())
+                f.write(content)
             self.opened_file = path
+            if r"\documentclass" in content:
+                self.master_file = path
             self.ui.editor.document().setModified(False)
             self.update_title()
+            self.update_project_root(path.parent)
             self.ui.logView.appendPlainText(f"Archivo guardado en {self.opened_file} \t {datetime.datetime.now()}")
             return True
         except OSError as e:
@@ -155,16 +179,22 @@ class MainWindow(QMainWindow):
             if not self.action_save_triggered():
                 return
 
-        self.compiler.setWorkingDirectory(str(self.opened_file.parent))
+        target_tex = self.master_file if self.master_file is not None else self.opened_file
+        self.compiling_file = target_tex
+
+        self.compiler.setWorkingDirectory(str(target_tex.parent))
         self.ui.actionCompile.setEnabled(False)
-        self.statusBar().showMessage("Compilando...")
+        self.statusBar().showMessage(f"Compilando {target_tex.name}...")
+        build_dir = f".tex_builds/{target_tex.stem}"
 
         args = [
             "-lualatex",
             "-synctex=1",
+            "-emulate-aux-dir",
+            f"-auxdir={build_dir}",
             "-interaction=nonstopmode",
             "-file-line-error",
-            self.opened_file.name,
+            target_tex.name,
         ]
         self.ui.logView.clear()
         self.compiler.start("latexmk",args)
@@ -175,16 +205,23 @@ class MainWindow(QMainWindow):
 
     def on_compile_finished(self,exit_code,exit_status):
         self.ui.actionCompile.setEnabled(True)
+        target_tex = getattr(self, "compiling_file", None) or self.master_file or self.opened_file
+        pdf_path = target_tex.with_suffix(".pdf")
         if exit_code == 0:
-            pdf_path = self.opened_file.with_suffix(".pdf")
             self.ui.logView.appendPlainText("\nCompilación Exitosa\n")
             self.statusBar().showMessage("Compilación Terminada")
             self.ui.pdfView.load_pdf(pdf_path)
         else:
             self.ui.logView.appendPlainText("\nError en la compilacion\n")
             self.statusBar().showMessage("Error en Compilacion")
-            if self.opened_file.with_suffix(".pdf").exists():
-                self.ui.pdfView.load_pdf(self.opened_file.with_suffix(".pdf"))
+            if pdf_path.exists():
+                self.ui.pdfView.load_pdf(pdf_path)
+
+        synctex_file = target_tex.with_suffix(".synctex.gz")
+        if synctex_file.exists():
+            target_dir = target_tex.parent / ".tex_builds" / target_tex.stem
+            target_dir.mkdir(parents = True, exist_ok = True)
+            synctex_file.replace(target_dir / synctex_file.name)
 
     def apply_theme(self, dark:bool):
         self.highlighter.set_theme("dark" if dark else "light")
@@ -210,6 +247,50 @@ class MainWindow(QMainWindow):
             line_num = int(match.group(1))
             self.ui.editor.go_to_line(line_num)
             self.statusBar().showMessage(f"Saltando a la línea {line_num}", 3000)
+
+    def setup_project_tree(self):
+        self.file_model = QFileSystemModel(self)
+        self.file_model.setFilter(QDir.Filter.NoDotAndDotDot | QDir.Filter.AllDirs | QDir.Filter.Files)
+        self.file_model.setNameFilterDisables(False)
+
+        self.tree_view = QTreeView(self)
+        self.tree_view.setModel(self.file_model)
+        self.tree_view.setHeaderHidden(True)
+
+        for col in (1,2,3):
+            self.tree_view.setColumnHidden(col, True)
+
+        self.tree_view.doubleClicked.connect(self.on_tree_double_clicked)
+
+        self.project_dock = QDockWidget("Proyecto", self)
+        self.project_dock.setWidget(self.tree_view)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.project_dock)
+        self.ui.menuView.addAction(self.project_dock.toggleViewAction())
+
+    def update_project_root(self, folder_path: pathlib.Path):
+        root_index = self.file_model.setRootPath(str(folder_path))
+        self.tree_view.setRootIndex(root_index)
+
+    def on_tree_double_clicked(self, index):
+        if self.file_model.isDir(index):
+            return
+
+        path = pathlib.Path(self.file_model.filePath(index))
+
+        if path == self.opened_file:
+            return
+
+        if path.suffix.lower() == ".pdf":
+            self.ui.pdfView.load_pdf(path)
+            return
+
+        if path.suffix.lower() in (".tex", ".bib", ".sty", ".cls", ".txt"):
+            if not self.maybe_save():
+                return
+            self.load_file(path)
+
+
+
 
     def closeEvent(self, event: QCloseEvent):
         if not self.maybe_save():
