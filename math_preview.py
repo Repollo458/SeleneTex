@@ -337,6 +337,7 @@ class MathRenderWorker(QThread):
                     capture_output=True,
                     text=True,
                     timeout=8,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 pdf_file = tdir / "preview.pdf"
                 if proc.returncode != 0 or not pdf_file.is_file():

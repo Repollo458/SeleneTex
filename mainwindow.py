@@ -1,4 +1,5 @@
 # This Python file uses the following encoding: utf-8
+import os
 import sys
 import datetime
 import pathlib
@@ -2400,6 +2401,7 @@ class MainWindow(QMainWindow):
                 capture_output=True,
                 text=True,
                 timeout=3,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             file_match = re.search(r"^Input:(.+)$", result.stdout, re.MULTILINE)
             line_match = re.search(r"^Line:(\d+)$", result.stdout, re.MULTILINE)
@@ -2435,6 +2437,7 @@ class MainWindow(QMainWindow):
                 capture_output=True,
                 text=True,
                 timeout=3,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             page_match = re.search(r"^Page:(\d+)$", result.stdout, re.MULTILINE)
             y_match = re.search(r"^y:([0-9.]+)$", result.stdout, re.MULTILINE)
@@ -3739,7 +3742,19 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Añadido al preámbulo: {', '.join(to_add)}", 4000)
 
 
+def _ensure_tex_in_path():
+    """En macOS, las apps .app lanzadas desde Finder no heredan /Library/TeX/texbin en PATH."""
+    if sys.platform != "darwin":
+        return
+    extra_dirs = ["/Library/TeX/texbin", "/opt/homebrew/bin", "/usr/local/bin"]
+    current = os.environ.get("PATH", "").split(os.pathsep)
+    to_prepend = [d for d in extra_dirs if os.path.isdir(d) and d not in current]
+    if to_prepend:
+        os.environ["PATH"] = os.pathsep.join(to_prepend + current)
+
+
 def main(argv: list[str] | None = None) -> int:
+    _ensure_tex_in_path()
     args = sys.argv if argv is None else argv
     app = QApplication(args)
     app.setApplicationName(APP_TITLE)

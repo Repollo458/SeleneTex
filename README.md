@@ -77,9 +77,22 @@
 
 ## Instalación y ejecución
 
+### Opción 1 — Descarga directa (Windows, macOS y Linux)
+Descarga el ejecutable listo para usar desde la sección **[Releases](https://github.com/Repollo458/SeleneTex/releases/latest)**:
+
+- **Windows**: descarga `SeleneTeX-windows-x86_64.exe` y ábrelo directamente.
+- **macOS**: descarga y descomprime `SeleneTeX-macos-arm64.zip` y abre `SeleneTeX.app` *(si macOS avisa la primera vez por no estar firmado, haz clic derecho → Abrir)*.
+- **Linux (x86_64)**: descarga `SeleneTeX-linux-x86_64` y ejecútalo:
+  ```bash
+  chmod +x SeleneTeX-linux-x86_64
+  ./SeleneTeX-linux-x86_64
+  ```
+
+### Opción 2 — Desde el código fuente (cualquier sistema)
+
 ```bash
-git clone https://github.com/TU_USUARIO/SeleneTeX.git
-cd SeleneTeX
+git clone https://github.com/Repollo458/SeleneTex.git
+cd SeleneTex
 
 # Crear entorno virtual (recomendado)
 python3 -m venv .venv

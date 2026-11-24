@@ -294,6 +294,7 @@ def _scan_sty_commands(pkg_name: str) -> set[str]:
             capture_output=True,
             text=True,
             timeout=0.5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         sty_path = res.stdout.strip()
         if sty_path and pathlib.Path(sty_path).is_file():
