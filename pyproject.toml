@@ -1,5 +1,33 @@
 [project]
-name = "Proyecto App Editor LaTeX"
+name = "selenetex"
+version = "1.0.0"
+description = "Editor LaTeX moderno de escritorio con visor PDF, SyncTeX, herramientas visuales e IA integrada."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6>=6.6.0",
+    "PyMuPDF>=1.24.0",
+]
+
+[project.scripts]
+selenetex = "mainwindow:main"
 
 [tool.pyside6-project]
-files = ["code_editor.py", "form.ui", "highlighter.py", "mainwindow.py", "pdf_viewer.py", "templates.py"]
+files = [
+    "ai_client.py",
+    "code_editor.py",
+    "form.ui",
+    "help_dialogs.py",
+    "highlighter.py",
+    "icons.py",
+    "latex_tools.py",
+    "mainwindow.py",
+    "mascot_widget.py",
+    "math_preview.py",
+    "pdf_viewer.py",
+    "preferences.py",
+    "selenetex.py",
+    "templates.py",
+    "ui_form.py",
+]

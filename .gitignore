@@ -1,5 +1,26 @@
+# Qt Creator & IDE
 .qtcreator/
 *.user
-ui_form.py
-__pycache__/
 *.autosave
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Empaquetado / Releases locales
+build/
+dist/
+*.spec
+
+# Temporales de LaTeX y secretos locales
+.tex_builds/
+.env
+.env.local
+.DS_Store
+Thumbs.db
